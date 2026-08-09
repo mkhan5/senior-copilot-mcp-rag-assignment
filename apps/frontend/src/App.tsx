@@ -332,19 +332,21 @@ function App() {
                 <FileText size={13} />
                 Citations
               </button>
-              <button
-                className={`tab-btn ${activeTab === 'trace' ? 'active' : ''}`}
-                onClick={() => setActiveTab('trace')}
-              >
-                <Terminal size={13} />
-                Trace
-              </button>
+              
               <button
                 className={`tab-btn ${activeTab === 'plan' ? 'active' : ''}`}
                 onClick={() => setActiveTab('plan')}
               >
                 <List size={13} />
                 Plan
+              </button>
+
+              <button
+                className={`tab-btn ${activeTab === 'trace' ? 'active' : ''}`}
+                onClick={() => setActiveTab('trace')}
+              >
+                <Terminal size={13} />
+                Trace
               </button>
             </div>
 
