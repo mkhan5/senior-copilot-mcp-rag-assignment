@@ -1,0 +1,118 @@
+services:
+  alarm-api:
+    build:
+      context: ./apps/alarm-api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ALARM_API_HOST=0.0.0.0
+      - ALARM_API_PORT=8000
+    volumes:
+      - ./apps/alarm-api:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  maintenance-cmms:
+    build:
+      context: ./connectors/maintenance
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - CMMS_DB_PATH=/data/maintenance.db
+    volumes:
+      - maintenance-db:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  alarm-mcp:
+    build:
+      context: ./mcp-servers/alarm-management
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"
+    environment:
+      - ALARM_API_BASE_URL=http://alarm-api:8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      alarm-api:
+        condition: service_healthy
+
+  maintenance-mcp:
+    build:
+      context: ./mcp-servers/maintenance
+      dockerfile: Dockerfile
+    ports:
+      - "9001:9001"
+    environment:
+      - CMMS_API_BASE_URL=http://maintenance-cmms:8001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      maintenance-cmms:
+        condition: service_healthy
+
+  rag-ingestion:
+    build:
+      context: ./rag/ingestion
+      dockerfile: Dockerfile
+    volumes:
+      - ./rag/documents:/app/documents
+      - ./rag/chroma_db:/app/chroma_db
+    environment:
+      - DOCUMENTS_DIR=/app/documents
+      - PERSIST_DIR=/app/chroma_db
+
+  copilot-backend:
+    build:
+      # Build context is repo root so Dockerfile can COPY mcp-servers/ and rag/
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ALARM_MCP_URL=http://alarm-mcp:9000/mcp
+      - MAINT_MCP_URL=http://maintenance-mcp:9001/mcp
+    depends_on:
+      alarm-mcp:
+        condition: service_healthy
+      maintenance-mcp:
+        condition: service_healthy
+    volumes:
+      # Mount main.py and rag source so code changes take effect without a full rebuild.
+      - ./apps/backend/main.py:/app/main.py
+      - ./rag/retrieval:/app/rag/retrieval
+      - ./rag/chroma_db:/app/rag/chroma_db
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://copilot-backend:8002
+      - DOCKER=true
+    depends_on:
+      - copilot-backend
+    volumes:
+      - ./apps/frontend:/app
+      - /app/node_modules
+
+volumes:
+  maintenance-db:

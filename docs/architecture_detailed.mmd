@@ -1,0 +1,291 @@
+flowchart TB
+    %% ============================================================
+    %% STYLES
+    %% ============================================================
+    classDef frontend fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#0d47a1
+    classDef backend fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c
+    classDef mcpClient fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#bf360c
+    classDef mcpServer fill:#ffe0b2,stroke:#ef6c00,stroke-width:2px,color:#e65100
+    classDef sourceSystem fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
+    classDef rag fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#880e4f
+    classDef observability fill:#fafafa,stroke:#616161,stroke-width:1px,stroke-dasharray: 5 5,color:#424242
+    classDef external fill:#fff8e1,stroke:#f9a825,stroke-width:2px,color:#f57f17
+
+    %% ============================================================
+    %% LAYER 1: FRONTEND (User Interface)
+    %% ============================================================
+    subgraph FE [Frontend Layer - Port 3000]
+        direction TB
+        UI[React + TypeScript + Vite<br/>Chat Interface]
+        ChatPanel[Chat Messages<br/>Markdown Rendering]
+        SidePanel[Side Panel Tabs]
+        CitationsTab[📄 Citations<br/>Source, Asset, Score]
+        TraceTab[🖥️ MCP Trace<br/>Tool, Input, Output, Time]
+        PlanTab[📋 Query Plan<br/>Intent, Route, Steps]
+        ConfidenceMeter[Confidence Meter<br/>0-100%]
+    end
+
+    class UI,ChatPanel,SidePanel,CitationsTab,TraceTab,PlanTab,ConfidenceMeter frontend
+
+    %% ============================================================
+    %% LAYER 2: BACKEND COPILOT ORCHESTRATION (FastAPI + LangGraph)
+    %% ============================================================
+    subgraph BE [Backend Copilot Orchestration - Port 8002]
+        direction TB
+        FastAPI[FastAPI Server<br/>/chat endpoint<br/>CORS enabled]
+        
+        subgraph LG [LangGraph Workflow - State Machine]
+            direction LR
+            N1[detect_intent<br/>Gemini 2.5 Flash<br/>Extract intent, assets, time_range]
+            N2[discover_mcp_tools<br/>List tools from both<br/>MCP servers]
+            N3[plan_mcp_execution<br/>Generate query plan<br/>with routing decisions]
+            N4[execute_alarm_tools<br/>Query Alarm MCP<br/>Conditional]
+            N5[execute_maintenance_tools<br/>Query Maintenance MCP<br/>Conditional]
+            N6[query_rag<br/>RAG Retrieval<br/>Conditional]
+            N7[synthesize_answer<br/>Gemini 2.5 Flash<br/>Combine all sources]
+        end
+
+        SessionStore[(In-Memory<br/>Session Store<br/>Multi-turn context)]
+        RAGClient[RAG Client<br/>RetrievalService<br/>ChromaDB + Gemini]
+    end
+
+    class FastAPI,N1,N2,N3,N4,N5,N6,N7,SessionStore,RAGClient backend
+
+    %% ============================================================
+    %% LAYER 3: MCP CLIENT (Streamable HTTP Transport)
+    %% ============================================================
+    subgraph MCPClient [MCP Client Layer - in Backend]
+        direction TB
+        AlarmMCPClient[Alarm MCP Client<br/>streamablehttp_client<br/>http://alarm-mcp:9000/mcp]
+        MaintMCPClient[Maintenance MCP Client<br/>streamablehttp_client<br/>http://maintenance-mcp:9001/mcp]
+        ToolDiscovery[Tool Discovery<br/>session.list_tools]
+        SchemaInvocation[Schema-Aware<br/>Tool Invocation<br/>session.call_tool]
+        ErrorHandling[Error Handling<br/>Retry, Timeout,<br/>Partial Failure]
+    end
+
+    class AlarmMCPClient,MaintMCPClient,ToolDiscovery,SchemaInvocation,ErrorHandling mcpClient
+
+    %% ============================================================
+    %% LAYER 4: MCP SERVERS (FastMCP)
+    %% ============================================================
+    subgraph MCPServer [MCP Server Layer]
+        direction TB
+        
+        subgraph AlarmMCP [Alarm Management MCP Server - Port 9000]
+            direction TB
+            AlarmMCPMain[FastMCP: alarm-management-mcp<br/>Streamable HTTP Transport]
+            AlarmTools[13 Tools Exposed:<br/>• search_assets<br/>• get_asset_metadata<br/>• get_alarms<br/>• get_alarm_by_id<br/>• get_alarm_summary KPIs<br/>• get_alarm_trends<br/>• get_alarm_correlation<br/>• get_flood_analysis<br/>• get_rationalization_candidates<br/>• get_priority_score<br/>• get_operator_recommendations<br/>• /health endpoint]
+            AlarmRetry[Retry Logic<br/>max_retries=3<br/>Timeout=30s]
+            AlarmAuth[Auth Propagation<br/>Bearer token<br/>Trace headers]
+        end
+
+        subgraph MaintMCP [Maintenance CMMS MCP Server - Port 9001]
+            direction TB
+            MaintMCPMain[FastMCP: maintenance-cmms-mcp<br/>Streamable HTTP Transport]
+            MaintTools[7 Tools Exposed:<br/>• search_assets<br/>• get_asset_metadata<br/>• get_work_orders<br/>• get_maintenance_logs<br/>• get_asset_work_order_summary<br/>• get_asset_maintenance_summary<br/>• get_spare_parts<br/>• /health endpoint]
+            MaintRetry[Retry Logic<br/>max_retries=3<br/>Timeout=30s]
+        end
+    end
+
+    class AlarmMCPMain,AlarmTools,AlarmRetry,AlarmAuth,MaintMCPMain,MaintTools,MaintRetry mcpServer
+
+    %% ============================================================
+    %% LAYER 5: SOURCE SYSTEMS
+    %% ============================================================
+    subgraph Source [Source Systems]
+        direction TB
+        
+        subgraph AlarmAPI [Alarm API Simulator - Port 8000]
+            direction TB
+            AlarmAPIMain[FastAPI<br/>Postman Spec Compliant]
+            AlarmEndpoints[Endpoints:<br/>• GET /assets/search<br/>• GET /assets/id/metadata<br/>• GET /alarms<br/>• GET /alarms/id<br/>• POST /alarms/summary<br/>• POST /alarms/trends<br/>• POST /alarms/correlation<br/>• POST /alarms/flood-analysis<br/>• POST /alarms/rationalization-candidates<br/>• POST /alarms/priority-score<br/>• POST /recommendations/operator-actions<br/>• GET /health]
+            AlarmAuth2[Bearer Token Auth<br/>Trace Header Propagation<br/>demo-token]
+        end
+
+        subgraph CMMS [Maintenance CMMS API - Port 8001]
+            direction TB
+            CMMSMain[FastAPI + SQLite]
+            CMMSEndpoints[Endpoints:<br/>• GET /assets<br/>• GET /assets/id<br/>• GET /work-orders<br/>• GET /maintenance-logs<br/>• GET /assets/id/work-order-summary<br/>• GET /assets/id/maintenance-summary<br/>• GET /spare-parts<br/>• GET /health]
+            CMMSDB[(SQLite DB<br/>maintenance.db<br/>Pre-seeded demo data)]
+        end
+    end
+
+    class AlarmAPIMain,AlarmEndpoints,AlarmAuth2,CMMSMain,CMMSEndpoints,CMMSDB sourceSystem
+
+    %% ============================================================
+    %% LAYER 6: RAG PIPELINE
+    %% ============================================================
+    subgraph RAG [RAG Pipeline]
+        direction TB
+        
+        subgraph Ingestion [Ingestion Pipeline - Batch Job]
+            direction TB
+            Docs[📄 Document Corpus<br/>• Equipment Manuals<br/>• Maintenance Procedures<br/>• Inspection Checklists<br/>• Spare Parts Guidance]
+            Loader[Document Loader<br/>Markdown, Text, PDF]
+            Splitter[RecursiveCharacterTextSplitter<br/>chunk_size=500, overlap=50]
+            Embedder[SentenceTransformer<br/>all-MiniLM-L6-v2]
+            ChromaIngest[(ChromaDB<br/>PersistentClient<br/>cosine similarity<br/>collection: maintenance_docs)]
+            Metadata[Metadata Extraction<br/>asset_id, asset_name<br/>doc_type, source]
+        end
+
+        subgraph Retrieval [Retrieval Service - Real-time]
+            direction TB
+            Retriever[RetrievalService<br/>Vector Search + Filters]
+            Filters[Metadata Filters<br/>asset_id, doc_type]
+            PromptGuard[Prompt Injection<br/>Detection]
+            GeminiRAG[Gemini 2.5 Flash<br/>Grounded Generation]
+            Citations[Citation Builder<br/>citation_id, source<br/>asset, score, chunk]
+        end
+    end
+
+    class Docs,Loader,Splitter,Embedder,ChromaIngest,Metadata,Retriever,Filters,PromptGuard,GeminiRAG,Citations rag
+
+    %% ============================================================
+    %% LAYER 7: OBSERVABILITY - LANGSMITH TRACING
+    %% ============================================================
+    subgraph Obs [Observability - LangSmith Tracing]
+        direction TB
+        LangSmith[LangSmith Platform<br/>Tracing & Monitoring]
+        
+        subgraph TracedComponents [traceable Decorators]
+            direction LR
+            T1[traceable run_type=tool<br/>mcp_call_tool<br/>_call_alarm_tool]
+            T2[traceable run_type=tool<br/>mcp_call_tool<br/>_call_maint_tool]
+            T3[traceable run_type=llm<br/>gemini_generate<br/>detect_intent, synthesize]
+            T4[LangGraph Auto-tracing<br/>State transitions<br/>Node execution]
+        end
+        
+        subgraph TraceData [Trace Metadata Captured]
+            direction TB
+            TD1[Request ID / Conversation ID]
+            TD2[Trace ID]
+            TD3[MCP Server & Tool Name]
+            TD4[Tool Duration & Outcome]
+            TD5[API Status Code]
+            TD6[Retry Count]
+            TD7[Retrieval Query & Scores]
+            TD8[LLM Latency & Token Usage]
+            TD9[Error Details]
+        end
+        
+        EnvVars[Environment Variables:<br/>LANGCHAIN_TRACING_V2=true<br/>LANGCHAIN_API_KEY=...<br/>LANGCHAIN_PROJECT=maintenance-copilot]
+    end
+
+    class LangSmith,T1,T2,T3,T4,TD1,TD2,TD3,TD4,TD5,TD6,TD7,TD8,TD9,EnvVars observability
+
+    %% ============================================================
+    %% LAYER 8: EXTERNAL SERVICES
+    %% ============================================================
+    subgraph External [External Services]
+        direction TB
+        GeminiAPI[Google Gemini API<br/>gemini-2.5-flash<br/>LLM Provider]
+        HFHub[Hugging Face Hub<br/>SentenceTransformer Models]
+    end
+
+    class GeminiAPI,HFHub external
+
+    %% ============================================================
+    %% DATA FLOW CONNECTIONS
+    %% ============================================================
+    
+    %% Frontend → Backend
+    UI -->|POST /chat<br/>HTTP/JSON| FastAPI
+    FastAPI -->|ChatResponse<br/>answer, citations<br/>mcp_trace, query_plan<br/>confidence| UI
+    
+    %% Backend → LangGraph Workflow
+    FastAPI -->|ainvoke| N1
+    N1 -->|intent, mcp_trace| N2
+    N2 -->|alarm_tool_names<br/>maint_tool_names| N3
+    N3 -->|query_plan| N4
+    N3 -.->|conditional| N5
+    N3 -.->|conditional| N6
+    N4 -->|alarm_mcp_results<br/>mcp_trace| N5
+    N4 -.->|conditional| N6
+    N4 -.->|conditional| N7
+    N5 -->|maint_mcp_results<br/>mcp_trace| N6
+    N5 -.->|conditional| N7
+    N6 -->|rag_results, citations<br/>mcp_trace| N7
+    N7 -->|final_answer, confidence| FastAPI
+    
+    %% Session Store
+    N1 -.->|read history| SessionStore
+    N7 -.->|write history| SessionStore
+    
+    %% Backend → MCP Client
+    N4 -->|async with alarm_mcp_session| AlarmMCPClient
+    N5 -->|async with maint_mcp_session| MaintMCPClient
+    N2 -->|list_tools| ToolDiscovery
+    N4 -->|call_tool| SchemaInvocation
+    N5 -->|call_tool| SchemaInvocation
+    SchemaInvocation -->|Error| ErrorHandling
+    
+    %% MCP Client → MCP Servers (Streamable HTTP)
+    AlarmMCPClient -->|Streamable HTTP<br/>MCP Protocol| AlarmMCPMain
+    MaintMCPClient -->|Streamable HTTP<br/>MCP Protocol| MaintMCPMain
+    
+    %% MCP Servers → Source Systems (HTTP)
+    AlarmMCPMain -->|HTTP + Bearer Token<br/>Retry/Timeout| AlarmAPIMain
+    MaintMCPMain -->|HTTP<br/>Retry/Timeout| CMMSMain
+    
+    %% Source Systems internal
+    AlarmAPIMain --> AlarmEndpoints
+    CMMSMain --> CMMSEndpoints
+    CMMSEndpoints --> CMMSDB
+    
+    %% Backend → RAG Client
+    N6 -->|rag_client.query| RAGClient
+    RAGClient -->|query| Retriever
+    Retriever -->|vector search + filters| ChromaIngest
+    Retriever -->|results| PromptGuard
+    PromptGuard -->|safe chunks| GeminiRAG
+    GeminiRAG -->|answer + citations| Citations
+    Citations -->|GroundedAnswer| RAGClient
+    
+    %% RAG Ingestion (Batch)
+    Docs --> Loader
+    Loader --> Splitter
+    Splitter --> Embedder
+    Embedder -->|embeddings| ChromaIngest
+    Loader --> Metadata
+    Metadata --> ChromaIngest
+    
+    %% LangSmith Tracing
+    T1 -.->|traces| LangSmith
+    T2 -.->|traces| LangSmith
+    T3 -.->|traces| LangSmith
+    T4 -.->|traces| LangSmith
+    LangSmith -->|collects| TD1
+    LangSmith -->|collects| TD2
+    LangSmith -->|collects| TD3
+    LangSmith -->|collects| TD4
+    LangSmith -->|collects| TD5
+    LangSmith -->|collects| TD6
+    LangSmith -->|collects| TD7
+    LangSmith -->|collects| TD8
+    LangSmith -->|collects| TD9
+    EnvVars -.->|configures| LangSmith
+    
+    %% External Services
+    T3 -.->|API calls| GeminiAPI
+    Embedder -.->|model download| HFHub
+    GeminiRAG -.->|API calls| GeminiAPI
+    
+    %% Health Checks
+    AlarmMCPMain -.->|GET /health| AlarmAPIMain
+    MaintMCPMain -.->|GET /health| CMMSMain
+    FastAPI -.->|GET /health| UI
+    
+    %% Docker Compose Service Dependencies
+    AlarmAPIMain -.->|depends_on: healthy| AlarmMCPMain
+    CMMSMain -.->|depends_on: healthy| MaintMCPMain
+    AlarmMCPMain -.->|depends_on: healthy| FastAPI
+    MaintMCPMain -.->|depends_on: healthy| FastAPI
+    FastAPI -.->|depends_on| UI
+
+    %% ============================================================
+    %% LEGEND
+    %% ============================================================
+    %% Solid lines: Primary request/response flow
+    %% Dashed lines: Conditional/secondary flows
+    %% Dotted lines: Observability/tracing
+    %% Colors: Layer grouping

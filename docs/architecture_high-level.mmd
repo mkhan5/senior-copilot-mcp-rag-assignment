@@ -1,0 +1,114 @@
+flowchart LR
+    %% ============================================================
+    %% STYLES - Minimal for single-screen presentation
+    %% ============================================================
+    classDef bo fill:#ffffff,stroke:#1565c0,stroke-width:1px
+    classDef fe fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    classDef be fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+    classDef mcpC fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef mcpS fill:#ffe0b2,stroke:#ef6c00,stroke-width:2px
+    classDef src fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    classDef rag fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef obs fill:#f5f5f5,stroke:#616161,stroke-width:2px,stroke-dasharray: 5 5
+    classDef ext fill:#fff8e1,stroke:#f9a825,stroke-width:2px
+
+    %% ============================================================
+    %% ARCHITECTURE LAYERS (Left to Right)
+    %% ============================================================
+
+    subgraph FE ["<span style='font-size:22px'><b>Frontend :3000</b></span>"]
+        UI[React Chat UI<br/>Citations • Trace • Plan]
+    end
+    class FE bo
+    class UI fe
+
+    subgraph BE ["<span style='font-size:22px'><b>Copilot Backend :8002</b></span>"]
+        API[FastAPI /chat]
+        LG[LangGraph Orchestrator<br/>7-Node Workflow]
+        Session[(Session Store)]
+        RAGC[RAG Client]
+    end
+    class BE bo
+    class API,LG,Session,RAGC be
+
+    subgraph MCPCL ["<span style='font-size:22px'><b>MCP Clients</b></span>"]
+        AMC[Alarm MCP Client<br/>streamable-HTTP]
+        MMC[Maintenance MCP Client<br/>streamable-HTTP]
+    end
+    class MCPCL bo
+    class AMC,MMC mcpC
+
+    subgraph MCPS ["<span style='font-size:22px'><b>MCP Servers</b></span>"]
+        AMS[Alarm MCP :9000<br/>FastMCP • 13 Tools]
+        MMS[Maintenance MCP :9001<br/>FastMCP • 7 Tools]
+    end
+    class MCPS bo
+    class AMS,MMS mcpS
+
+    subgraph SRC ["<span style='font-size:22px'><b>Source Systems</b></span>"]
+        AAS[Alarm API :8000<br/>FastAPI + Bearer Auth]
+        CAS[CMMS API :8001<br/>FastAPI + SQLite]
+    end
+    class SRC bo
+    class AAS,CAS src
+
+    subgraph RAGP ["<span style='font-size:22px'><b>RAG Pipeline</b></span>"]
+        sideInput[ ]
+        style sideInput fill:none,stroke:none
+        ING[Ingestion<br/>Docs]
+        CHRM[ChromaDB]
+        RET[Retrieval<br/>Vector Search + Filters → Gemini]
+    end
+    class RAGP bo
+    class ING,RET rag
+
+    subgraph OBS ["<span style='font-size:22px'><b>Observability</b></span>"]
+        LS[LangSmith Tracing<br/>@traceable on MCP calls & LLM<br/>Request/Trace ID, Duration, Errors]
+    end
+    class OBS bo
+    class LS obs
+
+    subgraph EXT ["<span style='font-size:22px'><b>External</b></span>"]
+        GEM[Gemini 2.5 Flash API]
+        HF[HF Hub: all-MiniLM-L6-v2]
+    end
+    class EXT bo
+    class GEM,HF ext
+
+    %% ============================================================
+    %% DATA FLOW (Primary Paths)
+    %% ============================================================
+    
+    UI -->|HTTP POST /chat| API
+    API -->|ainvoke| LG
+    LG -.->|conditional| AMC
+    LG -.->|conditional| MMC
+    LG -.->|conditional| RAGC
+    LG -->|final answer| API
+    API -->|ChatResponse| UI
+
+    AMC -->|MCP Protocol| AMS
+    MMC -->|MCP Protocol| MMS
+    
+    AMS -->|HTTP + Bearer| AAS
+    MMS -->|HTTP| CAS
+
+
+    ING --> |ingest| CHRM
+    RAGC -->|query| RET
+    RET -->|search| CHRM
+    RET -->|generate| GEM
+
+    %% Observability connections (dotted)
+    AMC -.->|traces| LS
+    MMC -.->|traces| LS
+    LG -.->|traces| LS
+    RET -.->|traces| LS
+
+    %% External deps
+    LG -.->|LLM calls| GEM
+    CHRM -.->|embeddings| HF
+    RET -.->|embeddings| HF
+
+    %% Session
+    LG <---> Session

@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Virtual environments
+.venv
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Git
+.git/
+.gitignore
+
+# Data
+rag/chroma_db/
+*.sqlite3
+*.bin
+
+# Node
+node_modules/
+*.log
+
+# Tests
+tests/
+*.pytest_cache/
+
+# Docs
+*.md
+!README.md
+
+# Misc
+*.tar.gz
+*.zip
