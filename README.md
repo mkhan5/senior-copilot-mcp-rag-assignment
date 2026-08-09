@@ -2,6 +2,17 @@
 
 A comprehensive maintenance copilot system that integrates alarm management, maintenance history, and document knowledge using MCP (Model Context Protocol), RAG (Retrieval-Augmented Generation), and LLM-based synthesis.
 
+## Demo Videos
+The videos demonstrating the solution are available in the assets folder. Two videos have been uploaded.
+
+The first video demonstrates various queries, most of which are taken from the `Submission_and_Evaluation_Guidelines.md` file.
+
+The second video demonstrates queries in different forms, shows the running system using a Docker build, and provides an explanation of the architecture.
+
+Links: 
+1. [assets/copilot_demo1.mp4](assets/copilot_demo1.mp4)
+2. [assets/copilot_demo2_with_architecture.mp4](assets/copilot_demo2_with_architecture.mp4)
+
 ## Selected Use Case
 
 **Industrial Maintenance Copilot for Alarm Analysis and Work Order Intelligence**
@@ -416,8 +427,7 @@ cd apps/backend && python -m pytest tests/ -v
 
 ## Demo Evidence
 
-- **Demo Video**: [To be uploaded to assets folder]
-- **Screenshots**: See `assets/` folder
+- **Demo Video**: See `assets/` folder
 - **MCP Tool Discovery View**: Frontend side panel "Query Plan" tab
 - **MCP Execution Trace**: Frontend side panel "MCP Trace" tab
 - **RAG Citations**: Frontend side panel "Citations" tab + inline `[1]`, `[2]` in answers
